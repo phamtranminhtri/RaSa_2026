@@ -63,7 +63,7 @@ class SmoothedValue(object):
     
     @property
     def global_avg(self):
-        if os.environ.get("SHILONG_AMP", None) == "1":
+        if os.environ.get("SHILONG_AMP", None) == "1": #### vị trí tích hợp cần thiết
             eps = 1e-4
         else:
             eps = 1e-6
@@ -215,8 +215,6 @@ class MetricLogger(object):
     def __str__(self):
         loss_str = []
         for name, meter in self.meters.items():
-            # print(name, str(meter))
-            # import ipdb;ipdb.set_trace()
             if meter.count > 0:
                 loss_str.append("{}: {}".format(name, str(meter)))
         return self.delimiter.join(loss_str)
