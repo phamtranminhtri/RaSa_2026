@@ -15,7 +15,7 @@
     ```bash
     conda create -n rasa python=3.8
     conda activate rasa
-    conda install pytorch==1.9.1 torchvision==0.10.1 transformers==4.8.1 timm==0.4.9 ruamel_yaml -c pytorch gdown -c conda-forge
+    conda install pytorch==1.9.1 torchvision==0.10.1 transformers==4.8.1 timm==0.4.9 ruamel_yaml gdown -c pytorch -c conda-forge
     ```
 
 2. Download **RSTPReid** [dataset](https://github.com/NjtechCVLab/RSTPReid-Dataset?tab=readme-ov-file#dataset-access):
