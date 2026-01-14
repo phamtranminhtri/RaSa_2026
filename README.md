@@ -10,6 +10,8 @@
 
 ## How to run
 
+> **Note**: If you want to run on Google Colab, first do these step at section [How to run in Google Colab](#how-to-run-in-google-colab)
+
 1. Create **conda** environment:
 
     ```bash
@@ -48,7 +50,9 @@
     cd ..
     ```
 
-5. Training (1 GPU):
+5. Set the appropiate batch size configuration in `source/configs/PS_rstp_reid.yaml`. See section [Configure suitable batch size for your GPU](#configure-suitable-batch-size-for-your-gpu)
+
+6. Training (1 GPU):
 
     ```bash
     cd source
@@ -70,3 +74,47 @@
     --checkpoint ../pretrain/ALBEF.pth \
     --eval_mAP
     ```
+
+## Configure suitable batch size for your GPU
+
+(*Recommended*) In `source/configs/PS_rstp_reid.yaml`, edit the parameter `batch_size_train`
+
+* Original RaSa GPU: 4x **3090** = 96 GB VRAM
+
+    ```yaml
+    batch_size_train: 13
+    ```
+
+* Example laptop's GPU: **4060 Mobile**  = 8 GB VRAM
+
+    ```yaml
+    batch_size_train: 2
+    ```
+
+* Google Colab's free tier GPU: **T4** = 16 GB VRAM
+
+    ```yaml
+    batch_size_train: 4
+    ```
+
+## How to run in Google Colab
+
+1. Open [Google Colab](https://colab.research.google.com/) and create a new notebook, then connect to **T4** GPU runtime.
+2. Open the terminal and install [Miniconda](/docs/getting-started/miniconda/install#macos-linux-installation):
+
+    ```bash
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    bash ./Miniconda3-latest-Linux-x86_64.sh -b
+    source ~/miniconda3/bin/activate
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+    ```
+
+3. Clone the repository:
+
+    ```bash
+    git clone https://github.com/phamtranminhtri/RaSa_2026.git
+    cd RaSa_2026
+    ```
+
+4. Follow the instruction from the begining in section [How to run](#how-to-run)
