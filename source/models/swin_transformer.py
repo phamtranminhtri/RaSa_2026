@@ -342,7 +342,7 @@ class PatchEmbed(nn.Module):
         if self.norm is not None:
             Wh, Ww = x.shape[2], x.shape[3]
             x = x.flatten(2).transpose(1, 2)  # B Wh*Ww C
-            x = x.self.norm(x)
+            x = self.norm(x)
             x = x.transpose(1, 2).view(-1, self.embed_dim, Wh, Ww)
         return x
     
