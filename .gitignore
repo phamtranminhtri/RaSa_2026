@@ -143,4 +143,6 @@ cython_debug/
 
 # dataset & pretrain weight
 dataset/*
+!dataset/.gitkeep
 pretrain/*
+!pretrain/.gitkeep
