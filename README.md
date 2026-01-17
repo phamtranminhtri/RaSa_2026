@@ -15,15 +15,14 @@
 1. Create **conda** environment:
 
     ```bash
-    conda create -n rasa python=3.8
+    conda create -n rasa python=3.8 -y
     conda activate rasa
-    conda install pytorch==1.9.1 torchvision==0.10.1 transformers==4.8.1 timm==0.4.9 ruamel_yaml gdown -c pytorch -c conda-forge
+    conda install pytorch==1.9.1 torchvision==0.10.1 transformers==4.8.1 timm==0.4.9 ruamel_yaml gdown -c pytorch -c conda-forge -y
     ```
 
 2. Download **RSTPReid** [dataset](https://github.com/NjtechCVLab/RSTPReid-Dataset?tab=readme-ov-file#dataset-access):
 
     ```bash
-    mkdir dataset
     cd dataset
     mkdir RSTPReid
     cd RSTPReid
@@ -44,7 +43,6 @@
 4. Download pretrain ALBEF checkpoint:
 
     ```bash
-    mkdir pretrain
     cd pretrain
     wget https://storage.googleapis.com/sfr-pcl-data-research/ALBEF/ALBEF.pth
     cd ..
