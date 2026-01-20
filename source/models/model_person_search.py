@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torch import nn
 from models.vit import VisionTransformer
 from models.xbert import BertConfig, BertForMaskedLM
+from models.swin_transformer import SwinTransformer, build_swin_transformer
 
 class ALBEF(nn.Module):
     def __init__(self,
@@ -16,9 +17,15 @@ class ALBEF(nn.Module):
         self.tokenizer = tokenizer
         embed_dim = config['embed_dim']
         vision_width = config['vision_width']
+        
+        
+        
         self.visual_encoder = VisionTransformer(
             img_size=config['image_res'], patch_size=16, embed_dim=768, depth=12, num_heads=12,
             mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), )
+        
+        self.swin_transformer = build_swin_transformer(modelname="swin_B_224_22k", pretrain_img_size=224)
+        
         bert_config = BertConfig.from_json_file(config['bert_config'])
         self.text_encoder = BertForMaskedLM.from_pretrained(text_encoder, config=bert_config)
         self.text_width = self.text_encoder.config.hidden_size
@@ -53,20 +60,38 @@ class ALBEF(nn.Module):
         self.image_queue = nn.functional.normalize(self.image_queue, dim=0)
         self.text_queue = nn.functional.normalize(self.text_queue, dim=0)
 
+    def swin_interpolate(self, image_embeds_lst):
+        embed2, embed3 = image_embeds_lst[2], image_embeds_lst[3]
+        embed2 = embed2.flatten(2).transpose(1, 2).contiguous()  # B, H*W(196), C(512)
+        embed3 = embed3.flatten(2).transpose(1, 2).contiguous()  # B, H*W(49), C(1024)
+        embed3 = embed3.view(-1, 196, 256)############# hardcode improvement for dimension alignment
+        image_embeds = torch.cat([image_embeds_lst[0], image_embeds_lst[1], embed2, embed3], dim=2)  # B, N, C
+        image_cls = image_embeds.mean(dim=1, keepdim=True)  # B, 1, C
+        image_embeds = torch.cat([image_cls, image_embeds], dim=1)  # B, N+1, C
+        return image_embeds
+        
+
     def forward(self, image1, image2, text1, text2, alpha, idx, replace):
         # extract image features
-        image_embeds = self.visual_encoder(image1)
-        image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image1.device)
-        image_feat = F.normalize(self.vision_proj(image_embeds[:, 0, :]), dim=-1)
+        image_embed_lst = self.swin_transformer(image1)
+        # image_embeds = self.visual_encoder(image1)# B, num_patches+1, embed_dim
+        image_embeds = self.swin_interpolate(image_embed_lst) # B, num_patches+1, embed_dim
+        
+        image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image1.device) # B, num_patches+1
+        image_feat = F.normalize(self.vision_proj(image_embeds[:, 0, :]), dim=-1) # B, embed_dim ---> [CLS] token
+        ##### Lớp tạo ra vector cls cho ảnh
+        
         # extract text features
         text_output = self.text_encoder.bert(text2.input_ids, attention_mask=text2.attention_mask,
-                                             return_dict=True, mode='text')
-        text_embeds = text_output.last_hidden_state
-        text_feat = F.normalize(self.text_proj(text_embeds[:, 0, :]), dim=-1)
+                                             return_dict=True, mode='text') # B, seq_len, hidden_size
+        text_embeds = text_output.last_hidden_state # B, seq_len, hidden_size
+        text_feat = F.normalize(self.text_proj(text_embeds[:, 0, :]), dim=-1) # B, embed_dim ---> [CLS] token
+        ##### Lớp tạo ra vector cls cho văn bản
+        
         # Contrastive loss
-        idx = idx.view(-1, 1)
-        idx_all = torch.cat([idx.t(), self.idx_queue.clone().detach()], dim=1)
-        pos_idx = torch.eq(idx, idx_all).float()
+        idx = idx.view(-1, 1) # B, 1 - positive pair
+        idx_all = torch.cat([idx.t(), self.idx_queue.clone().detach()], dim=1) # 1, B+ Queue_size
+        pos_idx = torch.eq(idx, idx_all).float() # B, B + Queue_size
         sim_targets = pos_idx / pos_idx.sum(1, keepdim=True)
         with torch.no_grad():
             self._momentum_update()
@@ -104,7 +129,7 @@ class ALBEF(nn.Module):
 
         # Relation-aware Learning: Probabilistic Image-Text Matching + Positive Relation Detection
         # Probabilistic Image-Text Matching
-        # forward the positve image-text pairs
+        # forward the positve image-text pairs. itm  
         output_pos = self.text_encoder.bert(encoder_embeds=text_embeds,
                                             attention_mask=text2.attention_mask,
                                             encoder_hidden_states=image_embeds,
@@ -144,7 +169,7 @@ class ALBEF(nn.Module):
         itm_labels = torch.cat([torch.ones(bs, dtype=torch.long), torch.zeros(2 * bs, dtype=torch.long)],
                                dim=0).to(image1.device)
         loss_pitm = F.cross_entropy(vl_output, itm_labels)
-        # Positive Relation Detection
+        # Positive Relation Detection prd
         prd_output = self.prd_head(output_pos.last_hidden_state[:, 0, :])
         loss_prd = F.cross_entropy(prd_output, replace)
 
@@ -152,7 +177,7 @@ class ALBEF(nn.Module):
         input_ids = text1.input_ids.clone()
         labels = input_ids.clone()
         mrtd_input_ids = input_ids.clone()
-        # Masked Language Modeling
+        # Masked Language Modeling mlm
         probability_matrix = torch.full(labels.shape, self.mlm_probability)
         input_ids, labels = self.mask(input_ids, self.text_encoder.config.vocab_size, targets=labels, probability_matrix=probability_matrix)
         with torch.no_grad():
@@ -174,7 +199,7 @@ class ALBEF(nn.Module):
                                        alpha=alpha
                                        )
         loss_mlm = mlm_output.loss
-        # Momentum-based Replaced Token Detection
+        # Momentum-based Replaced Token Detection m-rtd
         with torch.no_grad():
             probability_matrix = torch.full(labels.shape, self.mrtd_mask_probability)
             mrtd_input_ids = self.mask(mrtd_input_ids, self.text_encoder.config.vocab_size, probability_matrix=probability_matrix)

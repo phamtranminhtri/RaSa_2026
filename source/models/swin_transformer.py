@@ -524,31 +524,6 @@ class SwinTransformer(nn.Module):
         """Convert the model into training mode while keep layers freezed."""
         super(SwinTransformer, self).train(mode)
         self._freeze_stages()
-        
-def build_swin_transformer_backbone(cfg):
-    model = SwinTransformer(
-        pretrain_img_size=cfg.MODEL.SWIN.PRETRAIN_IMG_SIZE,
-        patch_size=cfg.MODEL.SWIN.PATCH_SIZE,
-        in_chans=cfg.MODEL.SWIN.IN_CHANS,
-        embed_dim=cfg.MODEL.SWIN.EMBED_DIM,
-        depths=cfg.MODEL.SWIN.DEPTHS,
-        num_heads=cfg.MODEL.SWIN.NUM_HEADS,
-        window_size=cfg.MODEL.SWIN.WINDOW_SIZE,
-        mlp_ratio=cfg.MODEL.SWIN.MLP_RATIO,
-        qkv_bias=cfg.MODEL.SWIN.QKV_BIAS,
-        qk_scale=cfg.MODEL.SWIN.QK_SCALE,
-        drop_rate=cfg.MODEL.SWIN.DROP_RATE,
-        attn_drop_rate=cfg.MODEL.SWIN.ATTN_DROP_RATE,
-        drop_path_rate=cfg.MODEL.SWIN.DROP_PATH_RATE,
-        norm_layer=nn.LayerNorm,
-        ape=cfg.MODEL.SWIN.APE,
-        patch_norm=cfg.MODEL.SWIN.PATCH_NORM,
-        out_indices=cfg.MODEL.SWIN.OUT_INDICES,
-        frozen_stages=cfg.MODEL.SWIN.FROZEN_STAGES,
-        dilation=cfg.MODEL.SWIN.DILATION,
-        use_checkpoint=cfg.MODEL.SWIN.USE_CHECKPOINT,
-    )
-    return model
 
 def build_swin_transformer(modelname, pretrain_img_size, **kw):
     assert modelname in [
