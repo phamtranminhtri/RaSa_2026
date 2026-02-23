@@ -1,0 +1,22 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "rasa",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/source",
+            "program": "${workspaceFolder}/source/Retrieval.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--config", "configs/PS_rstp_reid.yaml",
+                "--output_dir", "output/rstp-reid/train",
+                "--checkpoint", "../pretrain/ALBEF.pth",
+                "--eval_mAP"
+            ]       
+        }
+    ]
+}

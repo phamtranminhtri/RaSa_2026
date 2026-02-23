@@ -55,14 +55,37 @@ class ALBEF(nn.Module):
 
     def forward(self, image1, image2, text1, text2, alpha, idx, replace):
         # extract image features
-        image_embeds = self.visual_encoder(image1)
-        image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(image1.device)
-        image_feat = F.normalize(self.vision_proj(image_embeds[:, 0, :]), dim=-1)
+        image_embeds = self.visual_encoder(
+            image1 # (B, 3, 384, 384)
+        ) # (B, 577, 768)
+
+        image_atts = torch.ones(
+            image_embeds.size()[:-1], # (B, 557)
+            dtype=torch.long 
+        ).to(image1.device) # (B, 557)
+
+        image_feat = F.normalize(
+            self.vision_proj(
+                image_embeds[:, 0, :] # (B, 768)
+            ), # (B, 256)
+            dim=-1
+        ) # (B, 256)
+
         # extract text features
-        text_output = self.text_encoder.bert(text2.input_ids, attention_mask=text2.attention_mask,
-                                             return_dict=True, mode='text')
-        text_embeds = text_output.last_hidden_state
-        text_feat = F.normalize(self.text_proj(text_embeds[:, 0, :]), dim=-1)
+        text_output = self.text_encoder.bert(
+            text2.input_ids, # (B, 25)
+            attention_mask=text2.attention_mask, # (B, 25)
+            return_dict=True, 
+            mode='text'
+        )
+
+        text_embeds = text_output.last_hidden_state # (B, 25, 768)
+        text_feat = F.normalize(
+            self.text_proj(
+                text_embeds[:, 0, :] # (B, 768)
+            ), # (B, 256)
+            dim=-1
+        ) # (B, 256)
         # Contrastive loss
         idx = idx.view(-1, 1)
         idx_all = torch.cat([idx.t(), self.idx_queue.clone().detach()], dim=1)
