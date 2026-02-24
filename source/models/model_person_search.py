@@ -87,35 +87,48 @@ class ALBEF(nn.Module):
             dim=-1
         ) # (B, 256)
         # Contrastive loss
-        idx = idx.view(-1, 1)
-        idx_all = torch.cat([idx.t(), self.idx_queue.clone().detach()], dim=1)
-        pos_idx = torch.eq(idx, idx_all).float()
-        sim_targets = pos_idx / pos_idx.sum(1, keepdim=True)
+        idx = idx.view(-1, 1) # (B,) -> (B, 1)
+        idx_all = torch.cat([
+            idx.t(), # (1, B)
+            self.idx_queue.clone().detach() # (1, 65536)
+        ], dim=1) # (1, B + 65536)
+        pos_idx = torch.eq(idx, idx_all).float() # (B, B + 65536)
+        sim_targets = pos_idx / pos_idx.sum(1, keepdim=True) # (B, B + 65536)
         with torch.no_grad():
             self._momentum_update()
-            image_embeds_m = self.visual_encoder_m(image2)
-            image_feat_m = F.normalize(self.vision_proj_m(image_embeds_m[:, 0, :]), dim=-1)
-            image_feat_all = torch.cat([image_feat_m.t(), self.image_queue.clone().detach()], dim=1)
+            image_embeds_m = self.visual_encoder_m(image2) # (B, 577, 768)
+            image_feat_m = F.normalize(self.vision_proj_m(image_embeds_m[:, 0, :]), dim=-1) # (B, 256)
+            image_feat_all = torch.cat([
+                image_feat_m.t(), # (256, B)
+                self.image_queue.clone().detach() # (256, 65536)
+            ], dim=1) # (256, B + 65536)
 
-            text_output_m = self.text_encoder_m.bert(text2.input_ids, attention_mask=text2.attention_mask,
-                                                     return_dict=True, mode='text')
-            text_feat_m = F.normalize(self.text_proj_m(text_output_m.last_hidden_state[:, 0, :]), dim=-1)
-            text_feat_all = torch.cat([text_feat_m.t(), self.text_queue.clone().detach()], dim=1)
+            text_output_m = self.text_encoder_m.bert(
+                text2.input_ids, # (B, 25)
+                attention_mask=text2.attention_mask, # (B, 25)
+                return_dict=True, 
+                mode='text'
+            )
+            text_feat_m = F.normalize(self.text_proj_m(text_output_m.last_hidden_state[:, 0, :]), dim=-1) # (B, 256)
+            text_feat_all = torch.cat([
+                text_feat_m.t(), # (256, B)
+                self.text_queue.clone().detach() # (256, 65536)
+            ], dim=1) # (256, B + 65536)
 
-            sim_i2t_m = image_feat_m @ text_feat_all / self.temp
-            sim_t2i_m = text_feat_m @ image_feat_all / self.temp
-            sim_i2i_m = image_feat_m @ image_feat_all / self.temp
-            sim_t2t_m = text_feat_m @ text_feat_all / self.temp
+            sim_i2t_m = image_feat_m @ text_feat_all / self.temp # (B, B + 65536)
+            sim_t2i_m = text_feat_m @ image_feat_all / self.temp # (B, B + 65536)
+            sim_i2i_m = image_feat_m @ image_feat_all / self.temp # (B, B + 65536)
+            sim_t2t_m = text_feat_m @ text_feat_all / self.temp # (B, B + 65536)
 
-            sim_i2t_targets = alpha * F.softmax(sim_i2t_m, dim=1) + (1 - alpha) * sim_targets
-            sim_t2i_targets = alpha * F.softmax(sim_t2i_m, dim=1) + (1 - alpha) * sim_targets
-            sim_i2i_targets = alpha * F.softmax(sim_i2i_m, dim=1) + (1 - alpha) * sim_targets
-            sim_t2t_targets = alpha * F.softmax(sim_t2t_m, dim=1) + (1 - alpha) * sim_targets
+            sim_i2t_targets = alpha * F.softmax(sim_i2t_m, dim=1) + (1 - alpha) * sim_targets # (B, B + 65536)
+            sim_t2i_targets = alpha * F.softmax(sim_t2i_m, dim=1) + (1 - alpha) * sim_targets # (B, B + 65536)
+            sim_i2i_targets = alpha * F.softmax(sim_i2i_m, dim=1) + (1 - alpha) * sim_targets # (B, B + 65536)
+            sim_t2t_targets = alpha * F.softmax(sim_t2t_m, dim=1) + (1 - alpha) * sim_targets # (B, B + 65536)
 
-        sim_i2t = image_feat @ text_feat_all / self.temp
-        sim_t2i = text_feat @ image_feat_all / self.temp
-        sim_i2i = image_feat @ image_feat_all / self.temp
-        sim_t2t = text_feat @ text_feat_all / self.temp
+        sim_i2t = image_feat @ text_feat_all / self.temp # (B, B + 65536)
+        sim_t2i = text_feat @ image_feat_all / self.temp # (B, B + 65536)
+        sim_i2i = image_feat @ image_feat_all / self.temp # (B, B + 65536)
+        sim_t2t = text_feat @ text_feat_all / self.temp # (B, B + 65536)
 
         loss_i2t = -torch.sum(F.log_softmax(sim_i2t, dim=1) * sim_i2t_targets, dim=1).mean()
         loss_t2i = -torch.sum(F.log_softmax(sim_t2i, dim=1) * sim_t2i_targets, dim=1).mean()
