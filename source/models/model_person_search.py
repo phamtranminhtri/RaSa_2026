@@ -53,7 +53,16 @@ class ALBEF(nn.Module):
         self.image_queue = nn.functional.normalize(self.image_queue, dim=0)
         self.text_queue = nn.functional.normalize(self.text_queue, dim=0)
 
-    def forward(self, image1, image2, text1, text2, alpha, idx, replace):
+    def forward(
+        self, 
+        image1, # (B, 3, 384, 384)
+        image2, # (B, 3, 384, 384) 
+        text1, # input_ids (B, 25), attention_mask (B, 25)
+        text2, # input_ids (B, 25), attention_mask (B, 25)
+        alpha, # scalar
+        idx, # (B,)
+        replace # (B,)
+    ):
         # extract image features
         image_embeds = self.visual_encoder(
             image1 # (B, 3, 384, 384)
@@ -240,40 +249,43 @@ class ALBEF(nn.Module):
 
         # Momentum-based Replaced Token Detection
         with torch.no_grad():
-            probability_matrix = torch.full(labels.shape, self.mrtd_mask_probability)
+            probability_matrix = torch.full(labels.shape, self.mrtd_mask_probability) # (B, 25)
             mrtd_input_ids = self.mask(
-                mrtd_input_ids, 
-                self.text_encoder.config.vocab_size, 
+                mrtd_input_ids, # (B, 25)
+                self.text_encoder.config.vocab_size, # 30522
                 probability_matrix=probability_matrix
-            )
+            ) # (B, 25)
             # momentum module is used as generator
             mrtd_logits_m = self.text_encoder_m(
                 mrtd_input_ids,
-                attention_mask=text1.attention_mask,
-                encoder_hidden_states=image_embeds_m,
-                encoder_attention_mask=image_atts,
+                attention_mask=text1.attention_mask, # (B, 25)
+                encoder_hidden_states=image_embeds_m, # (B, 577, 768)
+                encoder_attention_mask=image_atts, # (B, 577)
                 return_dict=True,
                 return_logits=True,
-            )
-            weights = F.softmax(mrtd_logits_m, dim=-1)
+            ) # (B, 25, 30522)
+            weights = F.softmax(mrtd_logits_m, dim=-1) # (B, 25, 30522)
             mrtd_input_ids, mrtd_labels = self.mrtd_mask_modeling(
                 mrtd_input_ids, 
-                text1.input_ids, 
-                text1.attention_mask, 
+                text1.input_ids, # (B, 25)
+                text1.attention_mask, # (B, 25)
                 weights
-            )
+            ) # (B, 25), (B, 25)
 
         output_mrtd = self.text_encoder.bert(
-            mrtd_input_ids,
-            attention_mask=text1.attention_mask,
-            encoder_hidden_states=image_embeds,
-            encoder_attention_mask=image_atts,
+            mrtd_input_ids, # (B, 25)
+            attention_mask=text1.attention_mask, # (B, 25)
+            encoder_hidden_states=image_embeds, # (B, 577, 768)
+            encoder_attention_mask=image_atts, # (B, 577)
             return_dict=True,
-        )
+        ) # last_hidden_state (B, 25, 768)
         mrtd_output = self.mrtd_head(
-            output_mrtd.last_hidden_state.view(-1, self.text_width)
-        )
-        loss_mrtd = F.cross_entropy(mrtd_output, mrtd_labels.view(-1))
+            output_mrtd.last_hidden_state.view(-1, self.text_width) # (B*25, 768)
+        ) # (B*25, 2)
+        loss_mrtd = F.cross_entropy(
+            mrtd_output, # (B*25, 2)
+            mrtd_labels.view(-1) # (B*25)
+        ) # scalar
 
         return loss_cl, loss_pitm, loss_mlm, loss_prd, loss_mrtd
 
